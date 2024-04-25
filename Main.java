@@ -1,100 +1,136 @@
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-
-public class Main {
-
-    public static String generateRandomString(int length) {
-        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        StringBuilder sb = new StringBuilder(length);
-        Random random = new Random();
-        for (int i = 0; i < length; i++) {
-            sb.append(characters.charAt(random.nextInt(characters.length())));
-        }
-        return sb.toString();
-    }
-
-    public static void producer(int stringLength, BlockingQueue<String[]> resultQueue) {
-        while (true) {
-            String[] strings = {generateRandomString(stringLength)};
-            try {
-                resultQueue.put(strings); 
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public static void filterStrings(BlockingQueue<String[]> inputQueue, BlockingQueue<String[]> outputQueue) {
-        while (true) {
-            try {
-                String[] strings = inputQueue.take(); 
-                if (strings == null) {
-                    outputQueue.put(new String[0]);
-                    break;
-                }
-                String[] filteredStrings = filter(strings);
-                if (filteredStrings.length > 0) {
-                    outputQueue.put(filteredStrings); 
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public static String[] filter(String[] strings) {
-        List<String> filteredList = new ArrayList<>();
-        for (String string : strings) {
-            if (string.matches("[a-zA-Z]+")) {
-                filteredList.add(string);
-            }
-        }
-        return filteredList.toArray(new String[0]);
-    }
-
-    public static void consumer(BlockingQueue<String[]> outputQueue, int numStrings) {
-        int counter = 0;
-        while (true) {
-            try {
-                String[] strings = outputQueue.take(); 
-                if (strings.length == 0) {
-                    break;
-                }
-                for (String string : strings) {
-                    if (counter == numStrings) break;
-                    counter++;
-                    System.out.println(string); 
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
+public class Main{
     public static void main(String[] args) {
-        int numStrings = 10;
-        int stringLength = 5;
+            final LinkedList list = new LinkedList();
 
-        BlockingQueue<String[]> inputQueue = new ArrayBlockingQueue<>(1);   
-        BlockingQueue<String[]> outputQueue = new ArrayBlockingQueue<>(1);  
+            Thread thread1 = new Thread(() -> {
+                for (int i = 0; i < 5; i++) {
+                    list.add(i);
+                    System.out.println("Thread 1 adicionou: " + i);
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
 
-        Thread producerThread = new Thread(() -> producer(stringLength, inputQueue));
-        Thread filterThread = new Thread(() -> filterStrings(inputQueue, outputQueue));
-        Thread consumerThread = new Thread(() -> consumer(outputQueue, numStrings));
+            Thread thread2 = new Thread(() -> {
+                for (int i = 5; i < 10; i++) {
+                    list.add(i);
+                    System.out.println("Thread 2 adicionou: " + i);
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
 
-        producerThread.start();
-        filterThread.start();
-        consumerThread.start();
+            Thread thread3 = new Thread(() -> {
+                for (int i = 0; i < 5; i++) {
+                    int value = list.get(i);
+                    System.out.println("Thread 3 obteve: " + value + " na posição " + i);
+                    try {
+                        Thread.sleep(100);
+                    }catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
 
-        try {
-            producerThread.join();
-            filterThread.join();
-            consumerThread.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread thread4 = new Thread(() -> {
+                for (int i = 0; i < 3; i++) {
+                    list.remove(i);
+                    System.out.println("Thread 4 removeu elemento na posição " + i);
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+
+            thread1.start();
+            thread2.start();
+            thread3.start();
+            thread4.start();
+    }
+
+
+    private static class Node{
+        public Node next;
+        public int data;
+
+        public Node(int data){
+            this.next = null;
+            this.data = data;
         }
     }
+
+    static class LinkedList{
+        private Node head;
+        private int size;
+
+        public LinkedList(){
+            this.head = null;
+            this.size = 0;
+        }
+
+        public synchronized void add(int value){
+            Node newNode = new Node(value);
+
+            if(head == null){
+                head = newNode;
+            }else{
+                Node current = head;
+                while(current.next != null){
+                    current = current.next;
+                }
+                current.next = newNode;
+            }
+            size++;
+            notify();
+        }
+
+        public synchronized int get(int index){
+            while(index < 0 || index >= size){
+                try{
+                    wait();
+                }catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            Node current = head;
+            for (int i = 0; i < index; i++){
+                current = current.next;
+            }
+            return current.data;
+        }
+
+        public synchronized int size(){
+            return this.size;
+        }
+
+        public synchronized void remove(int index) {
+        while (index < 0 || index >= size) {
+            try {
+                wait();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (index == 0) {
+            head = head.next;
+        } else {
+            Node prev = null;
+            Node current = head;
+            for (int i = 0; i < index; i++) {
+                prev = current;
+                current = current.next;
+            }
+            prev.next = current.next;
+        }
+        size--;
+    }
+}
 }
